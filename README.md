@@ -37,17 +37,11 @@ A lightweight boilerplate to orchestrate Python scripts from Laravel, stream and
    ```bash
    php artisan migrate
    ```
- 5. **Frontend Setup**
-  This project includes a React frontend with live charting functionality. Install JavaScript dependencies:
-  ```bash
-  npm install
-  npm install chart.js chartjs-adapter-date-fns
-  ```
-6. **Build assets**
+5. **Build assets**
    ```bash
    npm run build
    ```
-7. **Serve application**
+6. **Serve application**
    ```bash
    composer run dev
    ```
