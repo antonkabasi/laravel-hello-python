@@ -20,7 +20,7 @@ A lightweight boilerplate to orchestrate Python scripts from Laravel, stream and
 
 1. **Clone repository**
    ```bash
-   git clone https://github.com/your-org/laravel-hello-python.git
+   git clone https://github.com/antonkabasi/laravel-hello-python.git
    cd laravel-hello-python
    ```
 2. **Install dependencies**
@@ -37,13 +37,19 @@ A lightweight boilerplate to orchestrate Python scripts from Laravel, stream and
    ```bash
    php artisan migrate
    ```
-5. **Build assets**
+ 5. **Frontend Setup**
+  This project includes a React frontend with live charting functionality. Install JavaScript dependencies:
+  ```bash
+  npm install
+  npm install chart.js chartjs-adapter-date-fns
+  ```
+6. **Build assets**
    ```bash
    npm run build
    ```
-6. **Serve application**
+7. **Serve application**
    ```bash
-   php artisan serve
+   composer run dev
    ```
    Access at `http://127.0.0.1:8000`.
 
@@ -62,7 +68,7 @@ matplotlib
 pillow
 ```
 
-- **matplotlib** is licensed under the PSF (Python Software Foundation) license, which is compatible with the MIT license of this project.
+- Third party licenses included and compatible with the MIT license of this project.
 
 ## Controllers
 
