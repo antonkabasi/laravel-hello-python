@@ -1,6 +1,6 @@
 # laravel-hello-python
 
-Based on the Starter kit for Laravel + Inertia + React projects with integrated Python CLI and live data streaming.
+Based on the Starter kit for Laravel + Inertia + React projects with integrated Python CLI, non-blocking background tasks, and live data streaming.
 
 A lightweight boilerplate to orchestrate Python scripts from Laravel, stream and visualize data in real time with React and Chart.js, backed by SQLite.
 
@@ -8,7 +8,8 @@ A lightweight boilerplate to orchestrate Python scripts from Laravel, stream and
 
 - **Python Integration**
   - Run Python scripts (`hello.py`, `plot_sine.py`) via Laravel controllers using Symfony Process.
-  - Background Python worker (`stream_writer.py`) writing random data into SQLite.
+  - **Asynchronous dispatch**: fire off Python jobs concurrently in the background without blocking.
+
 - **Live Streaming**
   - SSE endpoint (`PythonStreamController@stream`) to serve latest data.
   - React components to manage and visualize streaming data.
@@ -67,15 +68,12 @@ pillow
 ## Controllers
 
 ### PythonController
+Handles Python script execution:
 
-Handles simple Python script execution:
-
-- **handle()**  
-  Runs `tools/hello.py` via `python3` and returns its stdout as `output` in JSON.
-- **plotSine()**  
-  Executes `tools/plot_sine.py`, captures its base64 GIF output as `img` in JSON.
-
-Both methods log errors and return HTTP 500 with an `error` field if the Python script fails.
+ - **dispatch()**  
+   `POST /python/dispatch/{script}` — enqueue a Python job (e.g. `hello.py`, `plot_sine.py`), returns a UUID.
+ - **status()**  
+   `GET  /python/status/{uuid}` — poll job status (`running`, `done`), and fetch `stdout`/`stderr` when complete.
 
 ### PythonStreamController
 
@@ -92,27 +90,8 @@ Manages live streaming:
 
 ## React Components
 
-- **PythonRunner** — Executes Python scripts on demand.
-- **LiveStreamRunner** — Controls live data streaming, lists raw values, and renders a Chart.js line chart.
-
-## Directory Structure
-
-```
-laravel-hello-python/
-├── app/Http/Controllers/PythonController.php
-├── app/Http/Controllers/PythonStreamController.php
-├── database/migrations/0001_01_01_000003_create_stream_data_table.php
-├── resources/js/Components/PythonRunner.tsx
-├── resources/js/Components/LiveStreamRunner.tsx
-├── resources/js/Components/LiveStreamChart.tsx
-├── tools/
-│   ├── hello.py
-│   ├── plot_sine.py
-│   ├── stream_writer.py
-│   └── requirements.txt
-└── README.md
-└── requirements.md
-```
+ **PythonRunner** — Executes Python scripts on demand, using async dispatch & status polling.
+ **LiveStreamRunner** — Controls live data streaming, lists raw values, and renders a Chart.js line chart.
 
 ## License
 

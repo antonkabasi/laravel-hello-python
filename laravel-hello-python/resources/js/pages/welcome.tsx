@@ -44,8 +44,8 @@ export default function Welcome() {
                 </header>
 
                 {/* Python React components */}
-                <PythonRunner endpoint="/hello-python" />
-                <PythonRunner endpoint="/plot-sine" isImage={true}/>
+                <PythonRunner script="hello.py" />
+                <PythonRunner script="plot_sine.py" isImage/>
                 <LiveStreamRunner /> 
 
                 <div className="flex w-full items-center justify-center opacity-100 transition-opacity duration-750 lg:grow starting:opacity-0">

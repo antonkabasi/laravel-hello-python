@@ -1,5 +1,4 @@
 <?php
-// app/Http/Controllers/PythonStreamController.php
 
 namespace App\Http\Controllers;
 
@@ -18,11 +17,19 @@ class PythonStreamController extends Controller
      */
     public function history(): JsonResponse
     {
-        $rows = DB::table('stream_data')
-            ->orderBy('id', 'asc')
-            ->limit(300)
-            ->get(['id', 'timestamp', 'value']);
-        return response()->json($rows);
+        try {
+            $rows = DB::table('stream_data')
+                ->orderBy('id', 'asc')
+                ->limit(300)
+                ->get(['id','timestamp','value']);
+            return response()->json($rows);
+        } catch (\Throwable $e) {
+            Log::error('History load failed: '.$e->getMessage());
+            return response()->json(
+                ['error'=>'Could not load history: '.$e->getMessage()],
+                500
+            );
+        }
     }
 
     /**
@@ -31,40 +38,47 @@ class PythonStreamController extends Controller
     public function start(Request $req): JsonResponse
     {
         $script = base_path('tools/stream_writer.py');
-        // wrap in bash -lc so we can background (&) and echo $!
-        $cmd = "python3 {$script} > /dev/null 2>&1 & echo \$!";
-
-        // Use the Laravel Process facade to run the shell command
-        $res = Process::run(['bash', '-lc', $cmd]);
+        // launch in background and echo its PID
+        $cmd = "bash -lc 'nohup python3 ".escapeshellarg($script)." > /dev/null 2>&1 & echo \$!'";
+        $res = Process::run(['bash','-lc',$cmd]);
 
         if ($res->failed()) {
             Log::error('Failed to start stream_writer.py: '.$res->errorOutput());
-            return response()->json(['error' => trim($res->errorOutput())], 500);
+            return response()->json(
+                ['error'=>trim($res->errorOutput())],
+                500
+            );
         }
 
         $pid = trim($res->output());
-        Cache::put('stream_writer_pid', $pid, now()->addSeconds(20));
+        Cache::put('stream_writer_pid', $pid, now()->addMinutes(10));
+        Log::info("Started stream_writer.py with PID {$pid}");
 
-        return response()->json(['started' => true]);
+        return response()->json(['started'=>true,'pid'=>$pid]);
     }
 
     /**
-     * Kill all writer processes immediately.
+     * Kill the background writer by its cached PID.
      */
     public function stop(Request $req): JsonResponse
     {
-        // Do a pkill over the script name
-        $res = Process::run(['bash', '-lc', 'pkill -f stream_writer.py']);
+        $pid = Cache::pull('stream_writer_pid');
 
-        if ($res->failed()) {
-            Log::error('Failed to pkill stream_writer.py: '.$res->errorOutput());
-            return response()->json(['error' => trim($res->errorOutput())], 500);
+        if (! $pid) {
+            return response()->json(['error'=>'No running stream found'], 404);
         }
 
-        // Also clear any cached individual PID just in case
-        Cache::forget('stream_writer_pid');
+        $kill = Process::run(['kill','-TERM',$pid]);
+        if ($kill->failed()) {
+            Log::error("Failed to kill PID {$pid}: ".$kill->errorOutput());
+            return response()->json(
+                ['error'=>'Could not stop process: '.$kill->errorOutput()],
+                500
+            );
+        }
 
-        return response()->json(['stopped' => true]);
+        Log::info("Stopped stream_writer.py (PID {$pid})");
+        return response()->json(['stopped'=>true]);
     }
 
     /**
@@ -72,27 +86,23 @@ class PythonStreamController extends Controller
      */
     public function stream(): StreamedResponse
     {
-        return response()->stream(function () {
+        return response()->stream(function(){
             $lastId = null;
-
             while (true) {
                 $row = DB::table('stream_data')
                     ->latest('id')
                     ->first(['id','timestamp','value']);
-
                 if ($row && $row->id !== $lastId) {
-                    echo "data: " . json_encode($row) . "\n\n";
+                    echo "data: ".json_encode($row)."\n\n";
                     @ob_flush(); @flush();
                     $lastId = $row->id;
                 }
-
-                // sleep 200ms, but only poll DB when needed
                 usleep(200_000);
             }
         }, 200, [
-            'Content-Type'  => 'text/event-stream',
-            'Cache-Control' => 'no-cache',
-            'Connection'    => 'keep-alive',
+            'Content-Type'=>'text/event-stream',
+            'Cache-Control'=>'no-cache',
+            'Connection'=>'keep-alive',
         ]);
     }
 }

@@ -18,6 +18,15 @@ export default function LiveStreamRunner() {
   const chartRef  = useRef<HTMLCanvasElement>(null);
   const chartInst = useRef<Chart|null>(null);
 
+  const lastIdRef = useRef<number>(0);              // ADDED
+
+  // ADDED: helper to keep max 300 points and avoid duplicates
+  const appendUnique = (arr: typeof data, row: {id:number; timestamp:string; value:number}) => {
+    if (arr.length && arr[arr.length - 1].id === row.id) return arr;
+    if (arr.find(x => x.id === row.id)) return arr;
+    return [...arr.slice(-299), row];
+  };
+
   // 1) Init Chart.js
   useEffect(() => {
     if (!chartRef.current) return;
@@ -53,12 +62,23 @@ export default function LiveStreamRunner() {
   // 2) Load full history once
   useEffect(() => {
     fetch('/python-stream/history')
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`history HTTP ${r.status}`);
+        return r.json();
+      })
       .then((rows) => {
-        setData(rows);
+        // ADDED: dedupe and track lastId
+        const seen = new Set<number>();
+        const unique = (rows as typeof data).filter(r => !seen.has(r.id) && (seen.add(r.id), true));
+        setData(unique);
+        lastIdRef.current = unique.length ? unique[unique.length - 1].id : 0;  // ADDED
+
         const ch = chartInst.current!;
-        ch.data.datasets![0].data = rows.map((r:any)=>({ x:r.id, y:r.value }));
+        ch.data.datasets![0].data = unique.map((r:any)=>({ x:r.id, y:r.value }));
         ch.update('none');
+      })
+      .catch(err => {
+        console.error('Failed to load history:', err); // ADDED
       });
   }, []);
 
@@ -76,17 +96,36 @@ export default function LiveStreamRunner() {
     setTimeLeft(10);
 
     // launch python writer
-    await fetch('/python-stream/start', {
-      method:'POST',
-      headers:{ 'X-CSRF-TOKEN':getCsrf() }
-    });
+    try { // ADDED
+      const res = await fetch('/python-stream/start', {
+        method:'POST',
+        headers:{ 'X-CSRF-TOKEN':getCsrf() }
+      });
+      if (!res.ok) {
+        console.error('Failed to start writer:', res.status, await res.text()); // ADDED
+        setRunning(false); // ADDED
+        return;            // ADDED
+      }
+    } catch (e) {
+      console.error('Error starting writer:', e); // ADDED
+      setRunning(false);                           // ADDED
+      return;                                      // ADDED
+    }
 
     // open SSE
     const src = new EventSource('/python-stream/stream');
     evtRef.current = src;
     src.onmessage = e => {
       const row = JSON.parse(e.data);
-      setData(d => [...d.slice(-299), row]);
+
+      // ADDED: skip stale/duplicate ids
+      if (row.id <= lastIdRef.current) return;
+      lastIdRef.current = row.id;
+
+      setData(d => appendUnique(d, row)); // ADDED
+    };
+    src.onerror = (e) => {                 // ADDED
+      console.error('SSE error', e);
     };
 
     // countdown
@@ -117,7 +156,7 @@ export default function LiveStreamRunner() {
     fetch('/python-stream/stop', {
       method:'POST',
       headers:{ 'X-CSRF-TOKEN':getCsrf() }
-    });
+    }).catch(err => console.error('stop error', err)); // ADDED
 
     setRunning(false);
     setTimeLeft(0);
@@ -159,7 +198,9 @@ export default function LiveStreamRunner() {
                         rounded-sm h-64 overflow-y-auto">
           <ul className="space-y-1 text-sm font-mono text-black dark:text-white">
             {data.map(d => (
-              <li key={d.id}>#{d.id}: {d.value.toFixed(4)}</li>
+              <li key={`${d.id}-${d.timestamp}`}>
+                #{d.id}: {d.value.toFixed(4)}
+              </li>
             ))}
           </ul>
         </div>

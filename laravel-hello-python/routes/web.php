@@ -16,14 +16,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 require __DIR__.'/settings.php';
 require __DIR__.'/auth.php';
 
-#python controllers
-
+#python
 use App\Http\Controllers\PythonController;
-Route::get('hello-python', [PythonController::class, 'handle']);
-Route::get('plot-sine', [PythonController::class, 'plotSine']);
+Route::post('/python/dispatch/{script}', [PythonController::class,'dispatch']);
+Route::get('/python/status/{uuid}',        [PythonController::class,'status']);
 
 use App\Http\Controllers\PythonStreamController;
-Route::get('/python-stream/history', [PythonStreamController::class,'history']);
-Route::post('/python-stream/start',    [PythonStreamController::class,'start']);
-Route::post('/python-stream/stop',     [PythonStreamController::class,'stop']);
-Route::get('/python-stream/stream',    [PythonStreamController::class,'stream']);
+Route::prefix('python-stream')->group(function () {
+    Route::get ('/history', [PythonStreamController::class, 'history']);
+    Route::post('/start',   [PythonStreamController::class, 'start']);
+    Route::post('/stop',    [PythonStreamController::class, 'stop']);
+    Route::get ('/stream',  [PythonStreamController::class, 'stream']);
+});
